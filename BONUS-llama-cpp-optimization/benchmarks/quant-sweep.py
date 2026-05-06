@@ -69,11 +69,17 @@ TIERS: dict[str, dict] = {
 
 LLAMA_BENCH = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/llama-bench")
 LLAMA_BENCH_EXE = LLAMA_BENCH.with_suffix(".exe")
-TG_RE = re.compile(r"\|\s*tg128\s*\|\s*([0-9.]+)\s*±")
+TG_RE = re.compile(r"tg\d+\s*\|\s*([0-9.]+)")
 
 
 def find_bench() -> Path:
-    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE):
+    # Potential paths for llama-bench (Unix-like and Windows MSVC layouts)
+    search_paths = [
+        LLAMA_BENCH,
+        LLAMA_BENCH_EXE,
+        LLAMA_BENCH.parent / "Release" / "llama-bench.exe"
+    ]
+    for p in search_paths:
         if p.exists():
             return p
     print("ERROR: build llama.cpp first.", file=sys.stderr)

@@ -21,12 +21,18 @@ from pathlib import Path
 LLAMA_BENCH = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/llama-bench")
 LLAMA_BENCH_EXE = LLAMA_BENCH.with_suffix(".exe")
 
-# llama-bench prints a markdown-ish table; this regex grabs the tg128 (decode) row.
-TG_RE = re.compile(r"\|\s*tg128\s*\|\s*([0-9.]+)\s*±")
+# Grabs the tokens/sec from a row like "| ... | tg64 | 39.33 ± 1.75 |"
+TG_RE = re.compile(r"tg\d+\s*\|\s*([0-9.]+)")
 
 
 def find_bench() -> Path:
-    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE):
+    # Potential paths for llama-bench (Unix-like and Windows MSVC layouts)
+    search_paths = [
+        LLAMA_BENCH,
+        LLAMA_BENCH_EXE,
+        LLAMA_BENCH.parent / "Release" / "llama-bench.exe"
+    ]
+    for p in search_paths:
         if p.exists():
             return p
     print(f"ERROR: llama-bench not found at {LLAMA_BENCH}", file=sys.stderr)
@@ -61,7 +67,8 @@ def run_one(bench: Path, model: str, threads: int, n_gpu_layers: int) -> float:
         "-r", "2",
     ]
     print(f"   running: {' '.join(cmd[1:])}")
-    out = subprocess.run(cmd, capture_output=True, text=True, check=False).stdout
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    out = res.stdout + res.stderr
     m = TG_RE.search(out)
     if not m:
         # Fall back: scan for any decimal followed by t/s
