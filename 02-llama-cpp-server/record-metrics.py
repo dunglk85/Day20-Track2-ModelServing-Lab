@@ -57,8 +57,13 @@ def main() -> int:
     parser.add_argument("--url", default="http://localhost:8080/metrics")
     parser.add_argument("--duration", type=int, default=60, help="seconds to record")
     parser.add_argument("--interval", type=float, default=2.0, help="seconds between scrapes")
-    parser.add_argument("--out", default="benchmarks/02-server-metrics.csv")
+    parser.add_argument("--concurrency", type=int, help="concurrency level (used for labeling output)")
+    parser.add_argument("--out", default=None, help="output CSV path")
     args = parser.parse_args()
+
+    if args.out is None:
+        suffix = f"-c{args.concurrency}" if args.concurrency else ""
+        args.out = f"benchmarks/02-server-metrics{suffix}.csv"
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

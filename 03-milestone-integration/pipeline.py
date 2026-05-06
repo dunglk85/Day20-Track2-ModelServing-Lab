@@ -6,12 +6,29 @@ in-memory toy data so you can confirm the OpenAI-compat call before wiring
 in your real lakehouse + vector store.
 """
 from __future__ import annotations
-
+ 
 import time
 from dataclasses import dataclass
 from typing import Iterable
-
+import json
+import sys
+from pathlib import Path
 import httpx
+
+# ────────────────────────────────────────────────────────────────────────
+# Integration: Point to Day 19 Vector Store
+# ────────────────────────────────────────────────────────────────────────
+DAY19_PATH = Path(r"D:\AI In Action\Day19-Track2-VectorFeatureStore-Lab")
+CORPUS_PATH = DAY19_PATH / "data" / "corpus_vn.jsonl"
+
+# Inject Day 19 app path so we can import Searcher
+if str(DAY19_PATH) not in sys.path:
+    sys.path.append(str(DAY19_PATH))
+
+from app.search import Searcher
+
+print("==> Initializing Day 19 Searcher (loading embedding model)...")
+searcher = Searcher.from_corpus(CORPUS_PATH)
 
 LLAMA_SERVER_BASE = "http://localhost:8080/v1"
 SYSTEM_PROMPT = (
@@ -41,14 +58,12 @@ class Doc:
 
 
 def retrieve(query: str, k: int = 3) -> list[Doc]:
-    """STUB: replace with your N19 vector index call."""
-    # Toy keyword overlap so the demo does *something* sensible without an embedder.
-    q_terms = {w.lower() for w in query.split() if len(w) > 3}
-    scored = [
-        Doc(d["id"], d["text"], score=len(q_terms & {w.lower() for w in d["text"].split()}))
-        for d in TOY_DOCS
+    """Retrieves real documents from the Day 19 vector index."""
+    hits = searcher.search(query, mode="hybrid", top_k=k)
+    return [
+        Doc(id=h.doc_id, text=h.text, score=h.score)
+        for h in hits
     ]
-    return sorted(scored, key=lambda d: d.score, reverse=True)[:k]
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -74,7 +89,7 @@ def call_llm(messages: list[dict]) -> tuple[str, float]:
     t0 = time.perf_counter()
     r = httpx.post(
         f"{LLAMA_SERVER_BASE}/chat/completions",
-        json={"model": "local", "messages": messages, "max_tokens": 200, "temperature": 0.3},
+        json={"model": "local", "messages": messages, "max_tokens": 150, "temperature": 0.3},
         timeout=120.0,
     )
     r.raise_for_status()
@@ -86,11 +101,10 @@ def answer(query: str) -> dict:
     t_total = time.perf_counter()
 
     t = time.perf_counter()
-    docs = retrieve(query, k=3)
+    docs = retrieve(query, k=2)
     t_retrieve_ms = (time.perf_counter() - t) * 1000.0
 
     messages = build_prompt(query, docs)
-
     text, t_llm_ms = call_llm(messages)
 
     return {
